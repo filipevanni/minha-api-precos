@@ -57,7 +57,7 @@ COMBINACOES = {
 "categoria": "Couro Premium"},
     "Couro Bovino+Couro Tilápia+Couro Coelho": {"preco": 2167, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Couro Tilápia+Couro Piraricu": {"preco": 2097, 
+    "Couro Bovino+Couro Tilápia+Couro Pirarucu": {"preco": 2097, 
 "categoria": "Couro Premium"},
     "Couro Bovino+Couro Tilápia+Couro Python": {"preco": 2337, 
 "categoria": "Couro Premium"},
