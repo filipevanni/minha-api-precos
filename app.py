@@ -147,6 +147,9 @@ def preco():
 
     lista_materiais = [m.strip() for m in materiais.split(",")]
     chave = normaliza(lista_materiais)
+    print(f"Chave buscada: '{chave}'")
+    print("Materiais recebidos:", lista_materiais)
+
     resultado = COMBINACOES.get(chave)
 
     if resultado:
