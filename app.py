@@ -135,7 +135,6 @@ COMBINACOES = {
 "Casual Urbano"},
 }
 
-
 def normaliza(materiais):
     return "+".join(sorted([m.strip() for m in materiais]))
 
@@ -143,16 +142,10 @@ def normaliza(materiais):
 def preco():
     materiais = request.args.get("materiais")
     if not materiais:
-return jsonify({
-    "erro": "Combinação não encontrada",
-    "chave_buscada": chave
-}), 404
+        return jsonify({"erro": "Materiais não informados"}), 400
 
     lista_materiais = [m.strip() for m in materiais.split(",")]
     chave = normaliza(lista_materiais)
-    print(f"Chave buscada: '{chave}'")
-    print("Materiais recebidos:", lista_materiais)
-
     resultado = COMBINACOES.get(chave)
 
     if resultado:
@@ -161,13 +154,11 @@ return jsonify({
             "preco": resultado["preco"],
             "categoria": resultado["categoria"]
         })
-
-else:
-    return jsonify({
-        "erro": "Combinação não encontrada",
-        "chave_buscada": chave
-    }), 404
-
+    else:
+        return jsonify({
+            "erro": "Combinação não encontrada",
+            "chave_buscada": chave
+        }), 404
 
 if __name__ == "__main__":
     app.run(port=5000)
