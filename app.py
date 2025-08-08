@@ -161,9 +161,13 @@ return jsonify({
             "preco": resultado["preco"],
             "categoria": resultado["categoria"]
         })
-    else:
-        return jsonify({"erro": "Combinação não encontrada",
-            "chave_buscada": chave"}), 404
+
+else:
+    return jsonify({
+        "erro": "Combinação não encontrada",
+        "chave_buscada": chave
+    }), 404
+
 
 if __name__ == "__main__":
     app.run(port=5000)
