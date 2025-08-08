@@ -143,7 +143,10 @@ def normaliza(materiais):
 def preco():
     materiais = request.args.get("materiais")
     if not materiais:
-        return jsonify({"erro": "Materiais não informados"}), 400
+return jsonify({
+    "erro": "Combinação não encontrada",
+    "chave_buscada": chave
+}), 404
 
     lista_materiais = [m.strip() for m in materiais.split(",")]
     chave = normaliza(lista_materiais)
