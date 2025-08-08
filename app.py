@@ -1,142 +1,155 @@
 from flask import Flask, request, jsonify
+import unidecode
 
 app = Flask(__name__)
 
 COMBINACOES = {
-    "Couro Avestruz+Couro Bovino+Couro Tilápia": {"preco": 1997, 
+    "couro avestruz+couro bovino+couro tilapia": {"preco": 1997, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Bovino+Jeans": {"preco": 1667, "categoria": 
+    "couro avestruz+couro bovino+jeans": {"preco": 1667, "categoria": 
 "Casual Urbano"},
-    "Couro Avestruz+Couro Bovino+Couro Coelho": {"preco": 2337, 
+    "couro avestruz+couro bovino+couro coelho": {"preco": 2337, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Bovino+Couro Pirarucu": {"preco": 2267, 
+    "couro avestruz+couro bovino+couro pirarucu": {"preco": 2267, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Bovino+Couro Python": {"preco": 2497, 
+    "couro avestruz+couro bovino+couro python": {"preco": 2497, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Bovino+Couro Jacaré": {"preco": 2267, 
+    "couro avestruz+couro bovino+couro jacare": {"preco": 2267, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Coelho+Jeans": {"preco": 2167, "categoria": 
+    "couro avestruz+couro coelho+jeans": {"preco": 2167, "categoria": 
 "Casual Urbano"},
-    "Couro Avestruz+Couro Coelho+Couro Pirarucu": {"preco": 2767, 
+    "couro avestruz+couro coelho+couro pirarucu": {"preco": 2767, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Coelho+Couro Python": {"preco": 2997, 
+    "couro avestruz+couro coelho+couro python": {"preco": 2997, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Jacaré+Couro Pirarucu": {"preco": 2697, 
+    "couro avestruz+couro jacare+couro pirarucu": {"preco": 2697, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Jacaré+Jeans": {"preco": 2097, "categoria": 
+    "couro avestruz+couro jacare+jeans": {"preco": 2097, "categoria": 
 "Casual Urbano"},
-    "Couro Avestruz+Couro Jacaré+Couro Python": {"preco": 2937, 
+    "couro avestruz+couro jacare+couro python": {"preco": 2937, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Tilápia+Jeans": {"preco": 1837, "categoria": 
+    "couro avestruz+couro tilapia+jeans": {"preco": 1837, "categoria": 
 "Casual Urbano"},
-    "Couro Avestruz+Couro Tilápia+Couro Coelho": {"preco": 2497, 
+    "couro avestruz+couro tilapia+couro coelho": {"preco": 2497, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Tilápia+Couro Pirarucu": {"preco": 2437, 
+    "couro avestruz+couro tilapia+couro pirarucu": {"preco": 2437, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Couro Tilápia+Couro Python": {"preco": 2667, 
+    "couro avestruz+couro tilapia+couro python": {"preco": 2667, 
 "categoria": "Couro Premium"},
-    "Couro Avestruz+Jeans+Couro Pirarucu": {"preco": 2097, "categoria": 
+    "couro avestruz+jeans+couro pirarucu": {"preco": 2097, "categoria": 
 "Casual Urbano"},
-    "Couro Avestruz+Jeans+Couro Python": {"preco": 2337, "categoria": 
+    "couro avestruz+jeans+couro python": {"preco": 2337, "categoria": 
 "Casual Urbano"},
-    "Couro Bovino+Couro Coelho+Couro Jacaré": {"preco": 2437, "categoria": 
+    "couro bovino+couro coelho+couro jacare": {"preco": 2437, "categoria": 
 "Couro Premium"},
-    "Couro Bovino+Couro Coelho+Couro Pirarucu": {"preco": 2437, 
+    "couro bovino+couro coelho+couro pirarucu": {"preco": 2437, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Couro Coelho+Couro Python": {"preco": 2667, "categoria": 
+    "couro bovino+couro coelho+couro python": {"preco": 2667, "categoria": 
 "Couro Premium"},
-    "Couro Bovino+Couro Jacaré+Couro Coelho": {"preco": 2437, "categoria": 
+    "couro bovino+couro jacare+couro coelho": {"preco": 2437, "categoria": 
 "Couro Premium"},
-    "Couro Bovino+Couro Jacaré+Couro Pirarucu": {"preco": 2367, 
+    "couro bovino+couro jacare+couro pirarucu": {"preco": 2367, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Couro Jacaré+Couro Python": {"preco": 2597, "categoria": 
+    "couro bovino+couro jacare+couro python": {"preco": 2597, "categoria": 
 "Couro Premium"},
-    "Couro Bovino+Couro Jacaré+Couro Tilápia": {"preco": 2097, 
+    "couro bovino+couro jacare+couro tilapia": {"preco": 2097, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Couro Pirarucu+Couro Python": {"preco": 2597, 
+    "couro bovino+couro pirarucu+couro python": {"preco": 2597, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Couro Tilápia+Couro Coelho": {"preco": 2167, 
+    "couro bovino+couro tilapia+couro coelho": {"preco": 2167, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Couro Tilápia+Couro Pirarucu": {"preco": 2097, 
+    "couro bovino+couro tilapia+couro pirarucu": {"preco": 2097, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Couro Tilápia+Couro Python": {"preco": 2337, 
+    "couro bovino+couro tilapia+couro python": {"preco": 2337, 
 "categoria": "Couro Premium"},
-    "Couro Bovino+Jeans+Couro Coelho": {"preco": 1837, "categoria": 
+    "couro bovino+jeans+couro coelho": {"preco": 1837, "categoria": 
 "Casual Urbano"},
-    "Couro Bovino+Jeans+Couro Jacaré": {"preco": 1767, "categoria": 
+    "couro bovino+jeans+couro jacare": {"preco": 1767, "categoria": 
 "Casual Urbano"},
-    "Couro Bovino+Jeans+Couro Pirarucu": {"preco": 1767, "categoria": 
+    "couro bovino+jeans+couro pirarucu": {"preco": 1767, "categoria": 
 "Casual Urbano"},
-    "Couro Bovino+Jeans+Couro Python": {"preco": 1997, "categoria": 
+    "couro bovino+jeans+couro python": {"preco": 1997, "categoria": 
 "Casual Urbano"},
-    "Couro Bovino+Jeans+Couro Tilápia": {"preco": 1497, "categoria": 
+    "couro bovino+jeans+couro tilapia": {"preco": 1497, "categoria": 
 "Casual Urbano"},
-    "Couro Coelho+Couro Jacaré+Jeans": {"preco": 2267, "categoria": 
+    "couro coelho+couro jacare+jeans": {"preco": 2267, "categoria": 
 "Casual Urbano"},
-    "Couro Coelho+Couro Jacaré+Couro Pirarucu": {"preco": 2867, 
+    "couro coelho+couro jacare+couro pirarucu": {"preco": 2867, 
 "categoria": "Couro Premium"},
-    "Couro Coelho+Couro Jacaré+Couro Python": {"preco": 3097, "categoria": 
+    "couro coelho+couro jacare+couro python": {"preco": 3097, "categoria": 
 "Couro Premium"},
-    "Couro Coelho+Couro Pirarucu+Jeans": {"preco": 2267, "categoria": 
+    "couro coelho+couro pirarucu+jeans": {"preco": 2267, "categoria": 
 "Casual Urbano"},
-    "Couro Coelho+Couro Pirarucu+Couro Python": {"preco": 3097, 
+    "couro coelho+couro pirarucu+couro python": {"preco": 3097, 
 "categoria": "Couro Premium"},
-    "Couro Coelho+Couro Python+Jeans": {"preco": 2497, "categoria": 
+    "couro coelho+couro python+jeans": {"preco": 2497, "categoria": 
 "Casual Urbano"},
-    "Couro Jacaré+Couro Pirarucu+Jeans": {"preco": 2197, "categoria": 
+    "couro jacare+couro pirarucu+jeans": {"preco": 2197, "categoria": 
 "Casual Urbano"},
-    "Couro Jacaré+Couro Pirarucu+Couro Python": {"preco": 3037, 
+    "couro jacare+couro pirarucu+couro python": {"preco": 3037, 
 "categoria": "Couro Premium"},
-    "Couro Jacaré+Couro Python+Jeans": {"preco": 2437, "categoria": 
+    "couro jacare+couro python+jeans": {"preco": 2437, "categoria": 
 "Casual Urbano"},
-    "Couro Jacaré+Couro Tilápia+Jeans": {"preco": 1937, "categoria": 
+    "couro jacare+couro tilapia+jeans": {"preco": 1937, "categoria": 
 "Casual Urbano"},
-    "Couro Jacaré+Couro Tilápia+Couro Avestruz": {"preco": 2437, 
+    "couro jacare+couro tilapia+couro avestruz": {"preco": 2437, 
 "categoria": "Couro Premium"},
-    "Couro Jacaré+Couro Tilápia+Couro Coelho": {"preco": 2597, 
+    "couro jacare+couro tilapia+couro coelho": {"preco": 2597, 
 "categoria": "Couro Premium"},
-    "Couro Jacaré+Couro Tilápia+Couro Pirarucu": {"preco": 2537, 
+    "couro jacare+couro tilapia+couro pirarucu": {"preco": 2537, 
 "categoria": "Couro Premium"},
-    "Couro Jacaré+Couro Tilápia+Couro Python": {"preco": 2767, 
+    "couro jacare+couro tilapia+couro python": {"preco": 2767, 
 "categoria": "Couro Premium"},
-    "Couro Jacaré+Jeans+Couro Pirarucu": {"preco": 2197, "categoria": 
+    "couro jacare+jeans+couro pirarucu": {"preco": 2197, "categoria": 
 "Casual Urbano"},
-    "Couro Jacaré+Jeans+Couro Python": {"preco": 2437, "categoria": 
+    "couro jacare+jeans+couro python": {"preco": 2437, "categoria": 
 "Casual Urbano"},
-    "Couro Pirarucu+Couro Python+Jeans": {"preco": 2437, "categoria": 
+    "couro pirarucu+couro python+jeans": {"preco": 2437, "categoria": 
 "Casual Urbano"},
-    "Couro Tilápia+Couro Avestruz+Couro Coelho": {"preco": 2497, 
+    "couro tilapia+couro avestruz+couro coelho": {"preco": 2497, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Avestruz+Couro Pirarucu": {"preco": 2437, 
+    "couro tilapia+couro avestruz+couro pirarucu": {"preco": 2437, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Avestruz+Couro Python": {"preco": 2667, 
+    "couro tilapia+couro avestruz+couro python": {"preco": 2667, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Coelho+Couro Pirarucu": {"preco": 2597, 
+    "couro tilapia+couro coelho+couro pirarucu": {"preco": 2597, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Coelho+Couro Python": {"preco": 2837, 
+    "couro tilapia+couro coelho+couro python": {"preco": 2837, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Jacaré+Couro Avestruz": {"preco": 2437, 
+    "couro tilapia+couro jacare+couro avestruz": {"preco": 2437, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Jacaré+Couro Coelho": {"preco": 2597, 
+    "couro tilapia+couro jacare+couro coelho": {"preco": 2597, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Jacaré+Couro Pirarucu": {"preco": 2537, 
+    "couro tilapia+couro jacare+couro pirarucu": {"preco": 2537, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Couro Jacaré+Couro Python": {"preco": 2767, 
+    "couro tilapia+couro jacare+couro python": {"preco": 2767, 
 "categoria": "Couro Premium"},
-    "Couro Tilápia+Jeans+Couro Coelho": {"preco": 1997, "categoria": 
+    "couro tilapia+jeans+couro coelho": {"preco": 1997, "categoria": 
 "Casual Urbano"},
-    "Couro Tilápia+Jeans+Couro Pirarucu": {"preco": 1937, "categoria": 
+    "couro tilapia+jeans+couro pirarucu": {"preco": 1937, "categoria": 
 "Casual Urbano"},
-    "Couro Tilápia+Jeans+Couro Python": {"preco": 2167, "categoria": 
+    "couro tilapia+jeans+couro python": {"preco": 2167, "categoria": 
 "Casual Urbano"},
-    "Couro Tilápia+Jeans+Couro Avestruz": {"preco": 1837, "categoria": 
+    "couro tilapia+jeans+couro avestruz": {"preco": 1837, "categoria": 
 "Casual Urbano"},
-    "Jeans+Couro Pirarucu+Couro Python": {"preco": 2437, "categoria": 
+    "jeans+couro pirarucu+couro python": {"preco": 2437, "categoria": 
 "Casual Urbano"},
 }
 
-def normaliza(materiais):
-    return "+".join(sorted([m.strip() for m in materiais]))
+
+def normaliza_nome(material):
+    material = unidecode.unidecode(material.lower())
+    material = material.replace("de ", "")
+    material = material.replace("-", " ")
+    material = " ".join(material.split())
+    return material
+
+def normaliza_lista(materiais):
+    if isinstance(materiais, str):
+        materiais = [m.strip() for m in materiais.split(",")]
+    norm = [normaliza_nome(m) for m in materiais]
+    norm.sort()
+    return "+".join(norm)
 
 @app.route("/preco", methods=["GET"])
 def preco():
@@ -144,22 +157,21 @@ def preco():
     if not materiais:
         return jsonify({"erro": "Materiais não informados"}), 400
 
-    lista_materiais = [m.strip() for m in materiais.split(",")]
-    chave = normaliza(lista_materiais)
+    chave = normaliza_lista(materiais)
     resultado = COMBINACOES.get(chave)
 
     if resultado:
         return jsonify({
-            "materiais": lista_materiais,
+            "materiais": materiais,
             "preco": resultado["preco"],
             "categoria": resultado["categoria"]
         })
     else:
-        return jsonify({
-            "erro": "Combinação não encontrada",
-            "chave_buscada": chave
-        }), 404
+        return jsonify({"erro": "Combinação não encontrada", 
+"chave_buscada": chave}), 404
 
 if __name__ == "__main__":
     app.run(port=5000)
+
+
 
