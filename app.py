@@ -189,22 +189,18 @@ def preco():
     chave = normaliza_lista(materiais)
     resultado = COMBINACOES_NORMALIZADAS.get(chave)
 
-    if resultado:
-        return jsonify({
-            "materiais": materiais,                 # ecoa o que veio na 
-URL
-            "preco": resultado["preco"],
-            "categoria": resultado["categoria"]
-        })
-    else:
-        return jsonify({
-            "erro": "Combinação não encontrada",
-            "chave_buscada": chave                  # mostra a chave 
-normalizada que foi procurada
-        }), 404
-
-if __name__ == "__main__":
-    app.run(port=5000)
+if resultado:
+    return jsonify({
+        "materiais": materiais,        # ecoa o que veio na URL
+        "preco": resultado["preco"],
+        "categoria": resultado["categoria"]
+    })
+else:
+    return jsonify({
+        "erro": "Combinação não encontrada",
+        "chave_buscada": chave         # mostra a chave normalizada 
+procurada
+    }), 404
 
 
 
