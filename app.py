@@ -198,8 +198,10 @@ if resultado:
 else:
     return jsonify({
         "erro": "Combinação não encontrada",
-        "chave_buscada": chave         # mostra a chave normalizada 
-procurada
+else:
+    return jsonify({
+        "erro": "Combinação não encontrada",
+        "chave_buscada": chave
     }), 404
 
 
