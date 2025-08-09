@@ -198,9 +198,6 @@ if resultado:
 else:
     return jsonify({
         "erro": "Combinação não encontrada",
-else:
-    return jsonify({
-        "erro": "Combinação não encontrada",
         "chave_buscada": chave
     }), 404
 
