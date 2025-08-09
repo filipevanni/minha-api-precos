@@ -145,24 +145,29 @@ COMBINACOES_ORIG = {
 # 2) Normalização (não mexa)
 # =========================
 def normaliza_nome(material: str) -> str:
-    """remove acentos, deixa minúsculo, remove 'de' solto, normaliza 
-espaços e hífen."""
+    """
+    Remove acentos, deixa minúsculo, remove 'de' solto
+    e normaliza espaços e hífen.
+    Ex.: couro de avestruz -> couro avestruz
+    """
     txt = unidecode.unidecode(material.lower())
-    # remove ' de ' apenas como palavra (ex.: 'couro de avestruz' -> 
-'couro avestruz')
     txt = txt.replace(" de ", " ")
     txt = txt.replace("-", " ")
     txt = " ".join(txt.split())
     return txt
 
 def normaliza_lista(materiais) -> str:
-    """aceita string CSV ou lista; normaliza cada item e ordena; junta com 
-'+'."""
+    """
+    Aceita string CSV ou lista; normaliza cada item, ordena
+    e junta com '+'.
+    """
     if isinstance(materiais, str):
         materiais = [m.strip() for m in materiais.split(",")]
     norm = [normaliza_nome(m) for m in materiais if m.strip()]
     norm.sort()
     return "+".join(norm)
+
+
 
 # =========================
 # 3) Espelho normalizado do seu dicionário
