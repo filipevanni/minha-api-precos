@@ -1,183 +1,108 @@
-from flask import Flask, request, jsonify
-import requests
-from bs4 import BeautifulSoup
-import unidecode
 import os
-from typing import Dict, List
+import requests
+import csv
+import io
+from flask import Flask, request, jsonify
+import unidecode
 
 app = Flask(__name__)
 
-# --------------------------------------------------
-# 1) LISTA DAS ABAS PUBLICADAS (adicione novas aqui)
-#    Você pode também usar variáveis de ambiente:
-#    FONTE_URLS="url1;url2;url3"
-# --------------------------------------------------
-FONTE_URLS: List[str] = [
-    # 3 materiais (gid=0)
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vS4p-Chps89aJJiQP1OtmtPvEppL6xPfkpWkngh7HNDxJZ6SudSWE4M56qMPfn0cedgNqgstt90j2RB/pubhtml?gid=0&single=true",
-    # 4 materiais (gid=923305865)
-    "https://docs.google.com/spreadsheets/d/e/2PACX-1vS4p-Chps89aJJiQP1OtmtPvEppL6xPfkpWkngh7HNDxJZ6SudSWE4M56qMPfn0cedgNqgstt90j2RB/pubhtml?gid=923305865&single=true",
-]
-_env_urls = os.getenv("FONTE_URLS", "").strip()
-if _env_urls:
-    # permite sobrescrever pelos envs da Render (se quiser)
-    FONTE_URLS = [u.strip() for u in _env_urls.split(";") if u.strip()]
+# =========================
+# Normalização
+# =========================
+def _norm_nome(txt: str) -> str:
+    """Remove acentos, deixa minúsculo, tira 'de' isolado, normaliza hífen e espaços"""
+    t = unidecode.unidecode(txt.lower())
+    t = t.replace(" de ", " ")
+    t = t.replace("-", " ")
+    t = " ".join(t.split())
+    return t
 
-# --------------------------------------------------
-# 2) NORMALIZAÇÃO
-#    - remove acentos
-#    - minúsculas
-#    - remove " de " (apenas como palavra)
-#    - troca hífen por espaço
-#    - colapsa espaços
-#    - ordena alfabeticamente
-# --------------------------------------------------
-def normaliza_nome(material: str) -> str:
-    txt = unidecode.unidecode(material.lower())
-    txt = txt.replace(" de ", " ")
-    txt = txt.replace("-", " ")
-    txt = " ".join(txt.split())
-    return txt
-
-def normaliza_lista(materiais) -> str:
+def chave_normalizada(materiais) -> str:
+    """
+    Aceita string CSV ou lista, normaliza cada item e ordena.
+    Retorna 'a+b+c...'
+    """
     if isinstance(materiais, str):
-        materiais = [m.strip() for m in materiais.split(",")]
-    norm = [normaliza_nome(m) for m in materiais if m.strip()]
+        itens = [p.strip() for p in materiais.split(",") if p.strip()]
+    else:
+        itens = [str(p).strip() for p in materiais if str(p).strip()]
+    norm = [_norm_nome(p) for p in itens]
     norm.sort()
     return "+".join(norm)
 
-# --------------------------------------------------
-# 3) EXTRATOR DO GOOGLE SHEETS (publicado em HTML)
-#    Espera colunas:
-#      materiais | preco | categoria
-# --------------------------------------------------
-def extrair_dados_google_sheets(url: str) -> Dict[str, Dict]:
-    resp = requests.get(url, timeout=30)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
+# =========================
+# Cache das combinações
+# =========================
+CACHE = {}  # chave normalizada -> {"preco": int, "categoria": str}
 
-    # a versão "pubhtml" rende tabelas <table> com linhas <tr>
-    table = soup.find("table")
-    if not table:
-        return {}
+# URLs do Google Sheets via variáveis de ambiente
+FONTE_URL_1 = os.getenv("FONTE_URL_1")  # exemplo: planilha de 3 materiais
+FONTE_URL_2 = os.getenv("FONTE_URL_2")  # exemplo: planilha de 4 materiais
 
-    rows = table.find_all("tr")
-    if not rows:
-        return {}
-
-    # cabeçalhos
-    headers = [(" ".join(td.get_text(strip=True).split())).lower() for td in rows[0].find_all(["td", "th"])]
-
-    # mapeia índices das colunas
-    def idx(nome: str):
-        for i, h in enumerate(headers):
-            if nome in h:  # tolerante: "materiais", "preco", "categoria"
-                return i
-        return None
-
-    i_mat = idx("materiais")
-    i_pre = idx("preco")
-    i_cat = idx("categoria")
-
-    if i_mat is None or i_pre is None or i_cat is None:
-        return {}
-
-    resultado = {}
-    for tr in rows[1:]:
-        tds = tr.find_all("td")
-        if len(tds) <= max(i_mat, i_pre, i_cat):
-            continue
-
-        materiais_raw = tds[i_mat].get_text(strip=True)
-        preco_raw = tds[i_pre].get_text(strip=True).replace("R$", "").replace(".", "").replace(",", "").strip()
-        cat_raw = tds[i_cat].get_text(strip=True)
-
-        if not materiais_raw:
-            continue
-
-        # cria chave normalizada
-        chave = normaliza_lista(materiais_raw)
-        if not chave:
-            continue
-
-        # converte preço para int com tolerância
-        preco = None
-        try:
-            preco = int(preco_raw)
-        except Exception:
-            # tenta encontrar números dentro do texto
-            digits = "".join([c for c in preco_raw if c.isdigit()])
-            if digits:
-                try:
-                    preco = int(digits)
-                except Exception:
-                    pass
-
-        if preco is None:
-            continue
-
-        resultado[chave] = {
-            "preco": preco,
-            "categoria": cat_raw or "",
-        }
-
-    return resultado
-
-# --------------------------------------------------
-# 4) CACHE EM MEMÓRIA (carregado na inicialização)
-# --------------------------------------------------
-CACHE: Dict[str, Dict] = {}
-
-def carregar_cache():
+def carregar_dados():
+    """Carrega todas as combinações das planilhas no cache"""
     global CACHE
-    CACHE = {}
-    for url in FONTE_URLS:
-        try:
-            dados = extrair_dados_google_sheets(url)
-            CACHE.update(dados)
-        except Exception as e:
-            # não derruba a app se uma aba falhar
-            print(f"[WARN] Falha ao carregar {url}: {e}")
+    CACHE.clear()
+    fontes = [FONTE_URL_1, FONTE_URL_2]
+    
+    for url in fontes:
+        if not url:
+            continue
+        # Troca /pubhtml? por /pub?output=csv para ler como CSV
+        csv_url = url.replace("/pubhtml?", "/pub?output=csv&")
+        resp = requests.get(csv_url)
+        resp.raise_for_status()
 
-# carrega ao iniciar
-carregar_cache()
+        f = io.StringIO(resp.text)
+        reader = csv.DictReader(f)
+        for row in reader:
+            materiais_str = row.get("materiais", "")
+            preco_str = row.get("preco", "0")
+            categoria = row.get("categoria", "")
 
-# --------------------------------------------------
-# 5) ENDPOINTS
-# --------------------------------------------------
+            if not materiais_str or not preco_str:
+                continue
+
+            key = chave_normalizada(materiais_str)
+            CACHE[key] = {
+                "preco": int(preco_str),
+                "categoria": categoria
+            }
+
+# =========================
+# Rotas
+# =========================
+@app.route("/")
+def home():
+    return jsonify({"status": "API de preços ativa", "total_combinacoes": len(CACHE)})
+
 @app.route("/preco", methods=["GET"])
 def preco():
     materiais = request.args.get("materiais")
     if not materiais:
         return jsonify({"erro": "Materiais não informados"}), 400
 
-    chave = normaliza_lista(materiais)
-    resultado = CACHE.get(chave)
+    key = chave_normalizada(materiais)
+    dados = CACHE.get(key)
 
-    if resultado:
-        return jsonify({
-            "materiais": [m.strip() for m in materiais.split(",")],
-            "preco": resultado["preco"],
-            "categoria": resultado["categoria"]
-        })
-    else:
+    if not dados:
         return jsonify({
             "erro": "Combinação não encontrada",
-            "chave_buscada": chave
+            "chave_buscada": key
         }), 404
 
-@app.route("/reload", methods=["POST"])
-def reload_cache():
-    # opcional: recarrega manualmente sem reiniciar o serviço
-    carregar_cache()
-    return jsonify({"status": "ok", "itens": len(CACHE)})
+    return jsonify({
+        "materiais": [m.strip() for m in materiais.split(",")],
+        "preco": dados["preco"],
+        "categoria": dados["categoria"]
+    })
 
-@app.route("/")
-def raiz():
-    return jsonify({"status": "ok", "itens_cache": len(CACHE)})
-
-# --------------------------------------------------
-# 6) DEV LOCAL
-# --------------------------------------------------
+# =========================
+# Inicialização
+# =========================
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    carregar_dados()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+else:
+    carregar_dados()
