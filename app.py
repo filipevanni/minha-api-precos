@@ -90,7 +90,7 @@ def carregar_dados():
     CACHE.clear()
 
     fontes = []
-    for i in range(1, 6):
+    for i in range(1, 9):
         u = os.getenv(f"FONTE_URL_{i}")
         if u:
             fontes.append(u)
