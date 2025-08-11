@@ -1,108 +1,193 @@
-import os
-import requests
+from flask import Flask, request, jsonify
 import csv
 import io
-from flask import Flask, request, jsonify
+import os
+import re
+import requests
 import unidecode
 
 app = Flask(__name__)
 
-# =========================
-# Normalização
-# =========================
-def _norm_nome(txt: str) -> str:
-    """Remove acentos, deixa minúsculo, tira 'de' isolado, normaliza hífen e espaços"""
-    t = unidecode.unidecode(txt.lower())
-    t = t.replace(" de ", " ")
-    t = t.replace("-", " ")
-    t = " ".join(t.split())
-    return t
+# ----------------------------
+# Normalização de materiais
+# ----------------------------
+def normaliza_nome(material: str) -> str:
+    if material is None:
+        return ""
+    txt = unidecode.unidecode(material.lower())
+    # remove " de " como palavra solta
+    txt = re.sub(r"\bde\b", " ", txt)
+    # troca hífen por espaço e colapsa espaços
+    txt = txt.replace("-", " ")
+    txt = " ".join(txt.split())
+    return txt
 
-def chave_normalizada(materiais) -> str:
+def chave_normalizada(materiais):
     """
-    Aceita string CSV ou lista, normaliza cada item e ordena.
-    Retorna 'a+b+c...'
+    Aceita string CSV (ex.: "A, B, C") ou lista ["A","B","C"].
+    Normaliza cada item e ORDENA para que a chave seja estável.
     """
     if isinstance(materiais, str):
-        itens = [p.strip() for p in materiais.split(",") if p.strip()]
+        partes = [p.strip() for p in materiais.split(",") if p.strip()]
     else:
-        itens = [str(p).strip() for p in materiais if str(p).strip()]
-    norm = [_norm_nome(p) for p in itens]
+        partes = [str(p).strip() for p in materiais if str(p).strip()]
+    norm = [normaliza_nome(p) for p in partes]
+    norm = [n for n in norm if n]  # remove vazios
     norm.sort()
     return "+".join(norm)
 
-# =========================
-# Cache das combinações
-# =========================
-CACHE = {}  # chave normalizada -> {"preco": int, "categoria": str}
+# ----------------------------
+# Utilidades de planilha
+# ----------------------------
+def to_csv_url(url: str) -> str:
+    """
+    Converte pubhtml -> CSV automaticamente.
+    Aceita já CSV também.
+    """
+    if not url:
+        return url
+    # já é CSV?
+    if "output=csv" in url:
+        return url
+    # pubhtml?...gid=XXX&single=true  -> pub?gid=XXX&single=true&output=csv
+    if "/pubhtml" in url:
+        url = url.replace("/pubhtml", "/pub")
+        if "output=csv" not in url:
+            sep = "&" if "?" in url else "?"
+            url = f"{url}{sep}output=csv"
+    return url
 
-# URLs do Google Sheets via variáveis de ambiente
-FONTE_URL_1 = os.getenv("FONTE_URL_1")  # exemplo: planilha de 3 materiais
-FONTE_URL_2 = os.getenv("FONTE_URL_2")  # exemplo: planilha de 4 materiais
+def parse_preco(v):
+    """
+    Converte '1.997', '1997', '1.997,00' -> int(1997)
+    """
+    if v is None:
+        return None
+    s = str(v).strip()
+    if not s:
+        return None
+    # tira pontos de milhar
+    s = s.replace(".", "")
+    # vírgula decimal -> ponto
+    s = s.replace(",", ".")
+    try:
+        return int(round(float(s)))
+    except Exception:
+        return None
+
+# ----------------------------
+# Cache: chave_normalizada -> {preco, categoria}
+# ----------------------------
+CACHE = {}
 
 def carregar_dados():
-    """Carrega todas as combinações das planilhas no cache"""
+    """
+    Lê FONTE_URL_1..FONTE_URL_5, faz download (CSV),
+    e popula o CACHE com chaves normalizadas.
+    Requer pelo menos 1 fonte.
+    """
     global CACHE
     CACHE.clear()
-    fontes = [FONTE_URL_1, FONTE_URL_2]
-    
-    for url in fontes:
-        if not url:
+
+    fontes = []
+    for i in range(1, 6):
+        u = os.getenv(f"FONTE_URL_{i}")
+        if u:
+            fontes.append(u)
+
+    if not fontes:
+        app.logger.warning("Nenhuma FONTE_URL_n definida. Defina FONTE_URL_1 (e 2..5 se quiser).")
+        return
+
+    total_linhas = 0
+    total_ativas = 0
+
+    for raw_url in fontes:
+        url = to_csv_url(raw_url)
+        try:
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+        except Exception as e:
+            app.logger.error(f"Erro ao baixar planilha: {url} -> {e}")
             continue
-        # Troca /pubhtml? por /pub?output=csv para ler como CSV
-        csv_url = url.replace("/pubhtml?", "/pub?output=csv&")
-        resp = requests.get(csv_url)
-        resp.raise_for_status()
 
-        f = io.StringIO(resp.text)
-        reader = csv.DictReader(f)
+        # lê CSV
+        try:
+            content = resp.content.decode("utf-8", errors="ignore")
+            reader = csv.DictReader(io.StringIO(content))
+        except Exception as e:
+            app.logger.error(f"Erro ao ler CSV de {url}: {e}")
+            continue
+
         for row in reader:
-            materiais_str = row.get("materiais", "")
-            preco_str = row.get("preco", "0")
-            categoria = row.get("categoria", "")
+            total_linhas += 1
+            # nomes das colunas esperadas
+            materiais_raw = row.get("materiais") or row.get("Materiais") or row.get("MATERIAIS")
+            preco_raw = row.get("preco") or row.get("Preço") or row.get("preco (R$)")
+            categoria = row.get("categoria") or row.get("Categoria")
+            ativo = row.get("ativo") or row.get("Ativo")
 
-            if not materiais_str or not preco_str:
+            # se houver coluna 'ativo' e ela não for TRUE, ignora
+            if ativo is not None and str(ativo).strip().upper() != "TRUE":
                 continue
 
-            key = chave_normalizada(materiais_str)
-            CACHE[key] = {
-                "preco": int(preco_str),
-                "categoria": categoria
+            if not materiais_raw:
+                continue
+
+            chave = chave_normalizada(materiais_raw)
+            if not chave:
+                continue
+
+            preco = parse_preco(preco_raw)
+            if preco is None:
+                # sem preço válido, ignora
+                continue
+
+            total_ativas += 1
+            CACHE[chave] = {
+                "preco": preco,
+                "categoria": str(categoria).strip() if categoria is not None else ""
             }
 
-# =========================
-# Rotas
-# =========================
-@app.route("/")
-def home():
-    return jsonify({"status": "API de preços ativa", "total_combinacoes": len(CACHE)})
+    app.logger.info(f"Planilhas carregadas. Linhas lidas: {total_linhas}, registradas: {total_ativas}, chaves no cache: {len(CACHE)}")
 
-@app.route("/preco", methods=["GET"])
+# carrega na inicialização
+carregar_dados()
+
+# ----------------------------
+# Endpoints
+# ----------------------------
+@app.route("/health")
+def health():
+    return jsonify({"ok": True, "itens_cache": len(CACHE)})
+
+@app.route("/preco")
 def preco():
-    materiais = request.args.get("materiais")
+    """
+    GET /preco?materiais=A,B,C[,D...]
+    Retorna {materiais: [...], preco, categoria} ou 404 com chave_buscada.
+    """
+    materiais = request.args.get("materiais", "").strip()
     if not materiais:
         return jsonify({"erro": "Materiais não informados"}), 400
 
-    key = chave_normalizada(materiais)
-    dados = CACHE.get(key)
+    chave = chave_normalizada(materiais)
+    resultado = CACHE.get(chave)
 
-    if not dados:
+    if resultado:
+        # ecoa materiais como lista "bonita" (cada item strip)
+        lista = [m.strip() for m in materiais.split(",") if m.strip()]
+        return jsonify({
+            "materiais": lista,
+            "preco": resultado["preco"],
+            "categoria": resultado.get("categoria", "")
+        })
+    else:
         return jsonify({
             "erro": "Combinação não encontrada",
-            "chave_buscada": key
+            "chave_buscada": chave
         }), 404
 
-    return jsonify({
-        "materiais": [m.strip() for m in materiais.split(",")],
-        "preco": dados["preco"],
-        "categoria": dados["categoria"]
-    })
-
-# =========================
-# Inicialização
-# =========================
 if __name__ == "__main__":
-    carregar_dados()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-else:
-    carregar_dados()
+    # Para rodar local: python app.py
+    app.run(host="0.0.0.0", port=5000)
